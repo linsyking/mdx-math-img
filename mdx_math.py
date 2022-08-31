@@ -15,36 +15,40 @@ from markdown.inlinepatterns import InlineProcessor
 from markdown.extensions import Extension
 from markdown.preprocessors import Preprocessor
 from markdown.util import AtomicString
+import urllib.parse as up
 
 
 def _wrap_node(node, preview_text, wrapper_tag):
-    preview = Element('span', {'class': 'MathJax_Preview'})
-    preview.text = AtomicString(preview_text)
     wrapper = Element(wrapper_tag)
-    wrapper.extend([preview, node])
+    wrapper.extend([node])
     return wrapper
 
 
 class InlineMathPattern(InlineProcessor):
     def handleMatch(self, m, data):
-        node = Element('script')
-        node.set('type', self._content_type)
-        node.text = AtomicString(m.group(2))
-        if self._add_preview:
-            node = _wrap_node(node, m.group(0), 'span')
+        node = Element('img')
+        txt = AtomicString(m.group(2))
+        node.set('src', "https://i.upmath.me/svg/" + up.quote(txt))
+        node.set('alt', txt)
+        #if self._add_preview:
+            #node = _wrap_node(node, m.group(0), 'span')
         return node, m.start(0), m.end(0)
 
 
 class DisplayMathPattern(InlineProcessor):
     def handleMatch(self, m, data):
-        node = Element('script')
-        node.set('type', '%s; mode=display' % self._content_type)
+        node = Element('img')
         if '\\begin' in m.group(1):
-            node.text = AtomicString(m.group(0))
+            npc = AtomicString(m.group(0))
         else:
-            node.text = AtomicString(m.group(2))
+            npc = AtomicString(m.group(2))
+
+        node.set('src', "https://i.upmath.me/svg/" + up.quote(npc))
+        node.set('alt', npc)
+        node.set('align', 'center')
         if self._add_preview:
-            node = _wrap_node(node, m.group(0), 'div')
+            node = _wrap_node(node, m.group(0), 'p')
+            node.set('align', 'center')
         return node, m.start(0), m.end(0)
 
 
@@ -85,19 +89,13 @@ class MathExtension(Extension):
         self.config = {
             'enable_dollar_delimiter':
                 [False, 'Enable single-dollar delimiter'],
-            'add_preview': [False, 'Add a preview node before each math node'],
-            'use_asciimath':
-                [False, 'Use AsciiMath syntax instead of TeX syntax'],
-            'use_gitlab_delimiters':
-                [False, 'Use GitLab-style $`...`$ delimiters'],
+            'add_preview': [False, 'Add a preview node before each math node']
         }
         super(MathExtension, self).__init__(*args, **kwargs)
 
     def extendMarkdown(self, md):
         add_preview = self.getConfig('add_preview')
-        use_asciimath = self.getConfig('use_asciimath')
-        use_gitlab_delimiters = self.getConfig('use_gitlab_delimiters')
-        content_type = 'math/asciimath' if use_asciimath else 'math/tex'
+        content_type = 'math/tex'
 
         inlinemathpatterns = (
             InlineMathPattern(r'(?<!\\|\$)(\$)([^\$]+)(\$)'),    #  $...$
@@ -111,33 +109,18 @@ class MathExtension(Extension):
         )
         if not self.getConfig('enable_dollar_delimiter'):
             inlinemathpatterns = inlinemathpatterns[1:]
-        if use_asciimath:
-            mathpatterns = mathpatterns[:-1]  # \begin...\end is TeX only
-        if use_gitlab_delimiters:
-            # https://gitlab.com/gitlab-org/gitlab/blob/master/doc/user/markdown.md#math
-            inlinemathpatterns = (
-                InlineMathPattern(r'(?<!\\)(\$`)([^`]+)(`\$)'),  # $`...`$
-            )
-            mathpatterns = ()
-            preprocessor = GitLabPreprocessor(md)
-            preprocessor._content_type = content_type
-            # we should have higher priority than 'fenced_code_block' which
-            # has 25
-            md.preprocessors.register(preprocessor, 'math-gitlab', 27)
 
         for i, pattern in enumerate(mathpatterns):
             pattern._add_preview = add_preview
             pattern._content_type = content_type
             # we should have higher priority than 'escape' which has 180
-            # also begin/end pattern should have lower priority than all others
-            priority = 184 if i == 2 else 185
-            md.inlinePatterns.register(pattern, 'math-%d' % i, priority)
+            md.inlinePatterns.register(pattern, 'math-%d' % i, 185)
         for i, pattern in enumerate(inlinemathpatterns):
             pattern._add_preview = add_preview
             pattern._content_type = content_type
             # to use gitlab delimiters, we should have higher priority than
             # 'backtick' which has 190
-            priority = 195 if use_gitlab_delimiters else 185
+            priority = 185
             md.inlinePatterns.register(pattern, 'math-inline-%d' % i, priority)
         if self.getConfig('enable_dollar_delimiter'):
             md.ESCAPED_CHARS.append('$')
