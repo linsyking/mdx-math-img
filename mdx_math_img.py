@@ -45,10 +45,9 @@ class DisplayMathPattern(InlineProcessor):
 
         node.set('src', "https://i.upmath.me/svg/" + up.quote(npc))
         node.set('alt', npc)
-        node.set('align', 'center')
         if self._add_preview:
             node = _wrap_node(node, m.group(0), 'p')
-            node.set('align', 'center')
+            node.set('style', 'text-align: center;')
         return node, m.start(0), m.end(0)
 
 
